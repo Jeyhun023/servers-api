@@ -1,0 +1,62 @@
+services:
+  php:
+    container_name: servers-api
+    build:
+      context: .
+      dockerfile: ./docker/php/Dockerfile
+    volumes:
+      - .:/var/www/servers-api
+    working_dir: /var/www/servers-api
+    depends_on:
+      - mysql
+    restart: unless-stopped
+    networks:
+      - servers-api-net
+    healthcheck:
+      test: ["CMD", "php-fpm", "-t"]
+      interval: 20s
+      timeout: 20s
+      retries: 20
+      start_period: 15s
+
+  nginx:
+    container_name: servers-api-nginx
+    build:
+      context: .
+      dockerfile: ./docker/nginx/Dockerfile
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www/servers-api
+    restart: unless-stopped
+    depends_on:
+      php:
+        condition: service_healthy
+    networks:
+      - servers-api-net
+
+  mysql:
+    container_name: servers-api-mysql
+    image: mysql:8.0
+    volumes:
+      - servers-api-data:/var/lib/mysql
+    networks:
+      - servers-api-net
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_DATABASE=${DB_DATABASE}
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_USER=${DB_USERNAME}
+
+volumes:
+  servers-api-data:
+    name: servers-api-data
+    driver: local
+
+networks:
+  servers-api-net:
+    name: servers-api-net
+    driver: bridge
