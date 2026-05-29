@@ -1,0 +1,277 @@
+openapi: 3.0.3
+
+info:
+  title: Servers API
+  description: |
+    API project for listing dedicated servers with filtering and
+    pagination.
+  version: 1.0.0
+
+servers:
+  - url: http://98.91.25.67/
+    description: API structure
+
+tags:
+  - name: Servers
+    description: Server queries
+
+paths:
+  /api/servers:
+    get:
+      tags: [Servers]
+      summary: List servers
+      description: |
+        Returns a paginated list of servers. All filter parameters are optional. 
+        Results are ordered by `id` descending.
+      parameters:
+        - $ref: '#/components/parameters/Location'
+        - $ref: '#/components/parameters/HarddiskType'
+        - $ref: '#/components/parameters/Ram'
+        - $ref: '#/components/parameters/MinStorage'
+        - $ref: '#/components/parameters/MaxStorage'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Paginated list of matching servers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedServers'
+              examples:
+                default:
+                  $ref: '#/components/examples/PaginatedServersExample'
+        '422':
+          description: One or more query parameters failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /api/servers/options:
+    get:
+      tags: [Servers]
+      summary: Filter lists
+      description: |
+        Returns the value lists used to populate the filter: available
+        locations, RAM, harddisk type, and storage.
+      responses:
+        '200':
+          description: Option lists for each filter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerOptions'
+              examples:
+                default:
+                  $ref: '#/components/examples/ServerOptionsExample'
+
+components:
+
+  parameters:
+    Location:
+      name: location
+      in: query
+      required: false
+      description: Exact match against the server location (e.g. `AMS-01`).
+      schema:
+        type: string
+        example: AMS-01
+
+    HarddiskType:
+      name: harddisk_type
+      in: query
+      required: false
+      description: |
+        Case-insensitive substring match against the `hdd` field.
+      schema:
+        type: string
+        example: SSD
+
+    Ram:
+      name: 'ram[]'
+      in: query
+      required: false
+      explode: true
+      style: form
+      description: |
+        One or more RAM sizes to include.
+      schema:
+        type: array
+        items:
+          type: string
+        example: ['8GB', '16GB']
+
+    MinStorage:
+      name: min_storage
+      in: query
+      required: false
+      description: |
+        Lower bound on total harddisk storage. Total storage is computed
+        from the `hdd` string (e.g. `4x2TB` → 8000 GB, `1x500GB` → 500 GB).
+      schema:
+        type: integer
+        minimum: 0
+        example: 500
+
+    MaxStorage:
+      name: max_storage
+      in: query
+      required: false
+      description: Inclusive upper bound on total storage in GB.
+      schema:
+        type: integer
+        minimum: 0
+        example: 2000
+
+    Page:
+      name: page
+      in: query
+      required: false
+      description: 1-indexed page number. Page size is fixed at 10.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+
+  schemas:
+    Server:
+      type: object
+      required: [id, model, ram, hdd, location, price]
+      properties:
+        id:
+          type: integer
+          example: 42
+        model:
+          type: string
+          example: Dell R210
+        ram:
+          type: string
+          description: RAM size as a free-text label.
+          example: 8GB
+        hdd:
+          type: string
+          description: Disk configuration label.
+          example: 2x1TB
+        location:
+          type: string
+          example: AMS-01
+        price:
+          type: string
+          description: Monthly price as a decimal string.
+          example: '49.99'
+
+    PaginationMeta:
+      type: object
+      required: [current_page, per_page, total, last_page]
+      properties:
+        current_page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          example: 23
+        last_page:
+          type: integer
+          example: 3
+
+    PaginatedServers:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Server'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ServerOptions:
+      type: object
+      required: [locationOptions, ramValues, harddiskTypes, storageSlices]
+      properties:
+        locationOptions:
+          type: array
+          description: Distinct locations present in the inventory.
+          items:
+            type: string
+        ramValues:
+          type: array
+          description: Options of RAM sizes.
+          items:
+            type: string
+        harddiskTypes:
+          type: array
+          description: Options of harddisk types.
+          items:
+            type: string
+        storageSlices:
+          type: array
+          description: Options of storage slices.
+          items:
+            type: integer
+
+    ValidationError:
+      type: object
+      description: Symfony's default validation error response shape.
+      properties:
+        type:
+          type: string
+          example: https://symfony.com/errors/validation
+        title:
+          type: string
+          example: Validation Failed
+        status:
+          type: integer
+          example: 422
+        detail:
+          type: string
+          example: 'minStorage: This value should be positive or zero.'
+        violations:
+          type: array
+          items:
+            type: object
+            properties:
+              propertyPath:
+                type: string
+                example: minStorage
+              title:
+                type: string
+                example: This value should be positive or zero.
+              parameters:
+                type: object
+                additionalProperties: true
+
+  examples:
+    PaginatedServersExample:
+      summary: A two-item page of servers
+      value:
+        data:
+          - id: 12
+            model: Dell R210
+            ram: 8GB
+            hdd: 2x1TB
+            location: AMS-01
+            price: '49.99'
+          - id: 7
+            model: HP DL120 G7
+            ram: 16GB
+            hdd: 4xSSD 480GB
+            location: WAS-01
+            price: '79.00'
+        meta:
+          current_page: 1
+          per_page: 10
+          total: 2
+          last_page: 1
+
+    ServerOptionsExample:
+      summary: Filter option lists
+      value:
+        locationOptions: ['AMS-01', 'FRA-10', 'WAS-01']
+        ramValues: ['2GB', '4GB', '8GB', '12GB', '16GB', '24GB', '32GB', '48GB', '64GB', '96GB']
+        harddiskTypes: ['SAS', 'SATA', 'SSD']
+        storageSlices: [0, 250, 500, 1000, 2000, 3000, 4000, 8000, 12000, 24000, 48000, 72000]
