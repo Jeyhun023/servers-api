@@ -1,0 +1,277 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Dedicated Servers{% endblock %}
+
+{% block body %}
+<div class="container py-4">
+    <h1 class="mb-4">Dedicated Servers</h1>
+
+    <div class="row g-4">
+        <aside class="col-lg-3">
+            <form id="filters" class="card">
+                <div class="card-body">
+                    <h2 class="h6 text-uppercase text-muted mb-3">Filters</h2>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold mb-2">Storage</label>
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span data-role="storage-min-label">&nbsp;</span>
+                            <span data-role="storage-max-label">&nbsp;</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            class="form-range" 
+                            name="min_storage_idx" 
+                            data-role="storage-min" 
+                            min="0" 
+                            max="0" 
+                            step="1" 
+                            value="0"
+                        >
+                        <input 
+                            type="range" 
+                            class="form-range" 
+                            name="max_storage_idx" 
+                            data-role="storage-max" 
+                            min="0" 
+                            max="0" 
+                            step="1" 
+                            value="0"
+                        >
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold mb-2">RAM</label>
+                        <div data-role="ram-list" class="d-flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold" for="harddisk-type">Hard disk type</label>
+                        <select id="harddisk-type" name="harddisk_type" class="form-select">
+                            <option value="">Any</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold" for="location">Location</label>
+                        <select id="location" name="location" class="form-select">
+                            <option value="">Any</option>
+                        </select>
+                    </div>
+
+                    <button type="reset" class="btn btn-outline-secondary btn-sm w-100">Reset filters</button>
+                </div>
+            </form>
+        </aside>
+
+        <section class="col-lg-9">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span data-role="total" class="text-muted small"></span>
+                <div data-role="loading" class="spinner-border spinner-border-sm text-secondary d-none" role="status"></div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Model</th>
+                            <th>RAM</th>
+                            <th>HDD</th>
+                            <th>Location</th>
+                            <th class="text-end">Price</th>
+                        </tr>
+                    </thead>
+                    <tbody data-role="rows"></tbody>
+                </table>
+            </div>
+
+            <nav>
+                <ul data-role="pagination" class="pagination justify-content-center"></ul>
+            </nav>
+        </section>
+    </div>
+</div>
+
+<script type="module">
+    const form = document.getElementById('filters');
+    const els = {
+        storageMin: form.querySelector('[data-role=storage-min]'),
+        storageMax: form.querySelector('[data-role=storage-max]'),
+        storageMinLabel: form.querySelector('[data-role=storage-min-label]'),
+        storageMaxLabel: form.querySelector('[data-role=storage-max-label]'),
+        ramList: form.querySelector('[data-role=ram-list]'),
+        harddiskType: form.querySelector('#harddisk-type'),
+        location: form.querySelector('#location'),
+        rows: document.querySelector('[data-role=rows]'),
+        total: document.querySelector('[data-role=total]'),
+        pagination: document.querySelector('[data-role=pagination]'),
+        loading: document.querySelector('[data-role=loading]'),
+    };
+
+    const state = { page: 1, stops: [] };
+
+    const debounce = (fn, ms = 250) => {
+        let t;
+        return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+    };
+
+    const setLoading = (on) => els.loading.classList.toggle('d-none', !on);
+
+    const escapeHtml = (str) => String(str ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
+    const formatStorage = (gb) => gb === 0 ? '0' : (gb >= 1000 ? (gb / 1000) + 'TB' : gb + 'GB');
+
+    async function loadOptions() {
+        const res = await fetch('/api/servers/options');
+        const opts = await res.json();
+
+        state.stops = opts.storageSlices;
+        const maxIdx = Math.max(0, state.stops.length - 1);
+        els.storageMin.min = els.storageMax.min = 0;
+        els.storageMin.max = els.storageMax.max = maxIdx;
+        els.storageMin.value = 0;
+        els.storageMax.value = maxIdx;
+        updateStorageLabels();
+
+        els.ramList.innerHTML = opts.ramValues.map((v) => `
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="ram" value="${escapeHtml(v)}" id="ram-${escapeHtml(v)}">
+                <label class="form-check-label" for="ram-${escapeHtml(v)}">${escapeHtml(v)}</label>
+            </div>
+        `).join('');
+
+        els.harddiskType.insertAdjacentHTML('beforeend', opts.harddiskTypes.map(
+            (v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`
+        ).join(''));
+
+        els.location.insertAdjacentHTML('beforeend', opts.locationOptions.map(
+            (v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`
+        ).join(''));
+    }
+
+    function updateStorageLabels() {
+        const minStop = state.stops[+els.storageMin.value];
+        const maxStop = state.stops[+els.storageMax.value];
+        els.storageMinLabel.textContent = minStop != null ? formatStorage(minStop) : '';
+        els.storageMaxLabel.textContent = maxStop != null ? formatStorage(maxStop) : '';
+    }
+
+    function currentFilters() {
+        const ram = [...form.querySelectorAll('input[name=ram]:checked')].map((c) => c.value);
+        const minIdx = +els.storageMin.value;
+        const maxIdx = +els.storageMax.value;
+        const minGb = state.stops[Math.min(minIdx, maxIdx)];
+        const maxGb = state.stops[Math.max(minIdx, maxIdx)];
+        const rangeActive = minIdx > 0 || maxIdx < state.stops.length - 1;
+
+        return {
+            location: els.location.value || null,
+            harddisk_type: els.harddiskType.value || null,
+            ram,
+            min_storage: rangeActive && minGb != null ? minGb : null,
+            max_storage: rangeActive && maxGb != null ? maxGb : null,
+        };
+    }
+
+    function buildQuery(filters, page) {
+        const p = new URLSearchParams();
+        if (page > 1) p.set('page', page);
+        if (filters.location) p.set('location', filters.location);
+        if (filters.harddisk_type) p.set('harddisk_type', filters.harddisk_type);
+        if (filters.min_storage != null) p.set('min_storage', filters.min_storage);
+        if (filters.max_storage != null) p.set('max_storage', filters.max_storage);
+        filters.ram.forEach((v) => p.append('ram[]', v));
+        return p.toString();
+    }
+
+    async function loadServers() {
+        setLoading(true);
+        const qs = buildQuery(currentFilters(), state.page);
+        const res = await fetch('/api/servers' + (qs ? '?' + qs : ''));
+        const json = await res.json();
+        renderRows(json.data);
+        renderMeta(json.meta);
+        setLoading(false);
+    }
+
+    function renderRows(rows) {
+        if (!rows.length) {
+            els.rows.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">No servers match these filters.</td></tr>`;
+            return;
+        }
+        els.rows.innerHTML = rows.map((r) => `
+            <tr>
+                <td>${escapeHtml(r.model)}</td>
+                <td>${escapeHtml(r.ram)}</td>
+                <td>${escapeHtml(r.hdd)}</td>
+                <td>${escapeHtml(r.location)}</td>
+                <td class="text-end">${escapeHtml(r.price)}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderMeta(meta) {
+        els.total.textContent = `${meta.total} server${meta.total === 1 ? '' : 's'} · page ${meta.current_page} of ${meta.last_page || 1}`;
+
+        const pages = [];
+        const cur = meta.current_page;
+        const last = meta.last_page || 1;
+        const pageItem = (label, page, opts = {}) => `
+            <li class="page-item ${opts.disabled ? 'disabled' : ''} ${opts.active ? 'active' : ''}">
+                <a class="page-link" href="#" data-page="${page}">${label}</a>
+            </li>
+        `;
+        pages.push(pageItem('Previous', cur - 1, { disabled: cur <= 1 }));
+        for (let i = 1; i <= last; i++) {
+            if (i === 1 || i === last || Math.abs(i - cur) <= 2) {
+                pages.push(pageItem(i, i, { active: i === cur }));
+            } else if (Math.abs(i - cur) === 3) {
+                pages.push(`<li class="page-item disabled"><span class="page-link">…</span></li>`);
+            }
+        }
+        pages.push(pageItem('Next', cur + 1, { disabled: cur >= last }));
+        els.pagination.innerHTML = pages.join('');
+    }
+
+    const refresh = debounce(() => { state.page = 1; loadServers(); });
+
+    form.addEventListener('change', (e) => {
+        if (e.target.matches('[data-role=storage-min], [data-role=storage-max]')) return;
+        refresh();
+    });
+    form.addEventListener('input', (e) => {
+        if (!e.target.matches('[data-role=storage-min], [data-role=storage-max]')) return;
+        if (+els.storageMin.value > +els.storageMax.value) {
+            if (e.target === els.storageMin) els.storageMax.value = els.storageMin.value;
+            else els.storageMin.value = els.storageMax.value;
+        }
+        updateStorageLabels();
+        refresh();
+    });
+    form.addEventListener('reset', () => {
+        setTimeout(() => {
+            els.storageMin.value = 0;
+            els.storageMax.value = Math.max(0, state.stops.length - 1);
+            updateStorageLabels();
+            state.page = 1;
+            loadServers();
+        }, 0);
+    });
+    els.pagination.addEventListener('click', (e) => {
+        const a = e.target.closest('a[data-page]');
+        if (!a) return;
+        e.preventDefault();
+        if (a.closest('.disabled, .active')) return;
+        state.page = +a.dataset.page;
+        loadServers();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    (async () => {
+        await loadOptions();
+        await loadServers();
+    })();
+</script>
+{% endblock %}

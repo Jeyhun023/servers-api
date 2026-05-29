@@ -8,42 +8,55 @@ final class ServerQueryBuilder extends AppQueryBuilder
 {
     public function applyFilters(array $filters): self
     {
-        if (!empty($filters['model'])) {
-            $this
-                ->andWhere(sprintf('LOWER(%s.model) LIKE LOWER(:model)', $this->alias))
-                ->setParameter('model', '%' . $filters['model'] . '%');
-        }
-
         if (!empty($filters['location'])) {
             $this
-                ->andWhere(sprintf('LOWER(%s.location) LIKE LOWER(:location)', $this->alias))
-                ->setParameter('location', '%' . $filters['location'] . '%');
+                ->andWhere(sprintf('%s.location = :location', $this->alias))
+                ->setParameter('location', $filters['location']);
+        }
+
+        if (!empty($filters['harddisk_type'])) {
+            $this
+                ->andWhere(sprintf('LOWER(%s.hdd) LIKE LOWER(:harddiskType)', $this->alias))
+                ->setParameter('harddiskType', '%' . $filters['harddisk_type'] . '%');
         }
 
         if (!empty($filters['ram'])) {
-            $this
-                ->andWhere(sprintf('%s.ram = :ram', $this->alias))
-                ->setParameter('ram', $filters['ram']);
+            $clauses = [];
+            foreach (array_values($filters['ram']) as $i => $value) {
+                $param = 'ram' . $i;
+                $clauses[] = sprintf('%s.ram LIKE :%s', $this->alias, $param);
+                $this->setParameter($param, $value . '%');
+            }
+            $this->andWhere('(' . implode(' OR ', $clauses) . ')');
         }
 
-        if (!empty($filters['hdd'])) {
+        if (!empty($filters['min_storage'])) {
             $this
-                ->andWhere(sprintf('%s.hdd = :hdd', $this->alias))
-                ->setParameter('hdd', $filters['hdd']);
+                ->andWhere(sprintf('%s >= :minStorage', $this->totalStorage()))
+                ->setParameter('minStorage', $filters['min_storage']);
         }
 
-        if (!empty($filters['min_price'])) {
+        if (!empty($filters['max_storage'])) {
             $this
-                ->andWhere(sprintf('%s.price >= :minPrice', $this->alias))
-                ->setParameter('minPrice', $filters['min_price']);
-        }
-
-        if (!empty($filters['max_price'])) {
-            $this
-                ->andWhere(sprintf('%s.price <= :maxPrice', $this->alias))
-                ->setParameter('maxPrice', $filters['max_price']);
+                ->andWhere(sprintf('%s <= :maxStorage', $this->totalStorage()))
+                ->setParameter('maxStorage', $filters['max_storage']);
         }
 
         return $this;
+    }
+
+    private function totalStorage(): string
+    {
+        $alias = $this->alias;
+
+        return "(
+            CASE WHEN {$alias}.hdd LIKE '%x%' THEN SUBSTRING_INDEX({$alias}.hdd, 'x', 1) ELSE 1 END
+            *
+            CASE
+                WHEN {$alias}.hdd LIKE '%TB%' THEN SUBSTRING_INDEX(SUBSTRING_INDEX({$alias}.hdd, 'TB', 1), 'x', -1) * 1000
+                WHEN {$alias}.hdd LIKE '%GB%' THEN SUBSTRING_INDEX(SUBSTRING_INDEX({$alias}.hdd, 'GB', 1), 'x', -1)
+                ELSE 0
+            END
+        )";
     }
 }

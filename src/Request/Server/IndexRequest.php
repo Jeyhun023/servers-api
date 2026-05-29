@@ -9,34 +9,38 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 final readonly class IndexRequest
 {
+    /**
+     * @param list<string> $ram
+     */
     public function __construct(
-        public ?string $model = null,
-        public ?string $ram = null,
-        public ?string $hdd = null,
         public ?string $location = null,
 
-        #[SerializedName('min_price')]
-        #[Assert\PositiveOrZero]
-        public ?float $minPrice = null,
+        #[SerializedName('harddisk_type')]
+        public ?string $harddiskType = null,
 
-        #[SerializedName('max_price')]
+        public array $ram = [],
+
+        #[SerializedName('min_storage')]
         #[Assert\PositiveOrZero]
-        public ?float $maxPrice = null,
+        public ?int $minStorage = null,
+
+        #[SerializedName('max_storage')]
+        #[Assert\PositiveOrZero]
+        public ?int $maxStorage = null,
 
         #[Assert\Positive]
         public int $page = 1,
     ) {
     }
 
-    public function toArray(): array
+    public function filters(): array
     {
         return [
-            'model' => $this->model,
-            'ram' => $this->ram,
-            'hdd' => $this->hdd,
             'location' => $this->location,
-            'min_price' => $this->minPrice,
-            'max_price' => $this->maxPrice,
+            'harddisk_type' => $this->harddiskType,
+            'ram' => $this->ram,
+            'min_storage' => $this->minStorage,
+            'max_storage' => $this->maxStorage,
         ];
     }
 }
