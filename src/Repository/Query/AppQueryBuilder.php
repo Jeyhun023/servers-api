@@ -58,6 +58,11 @@ class AppQueryBuilder
         return $this;
     }
 
+    public function orderByDesc(string $sort): static
+    {
+        return $this->orderBy($sort, 'DESC');
+    }
+
     public function paginate(int $page = 1): array
     {
         return $this->paginator->paginate($this->queryBuilder, $page);
