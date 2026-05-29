@@ -8,7 +8,7 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://98.91.25.67/
+  - url: https://servers.hesabla.com/
     description: API structure
 
 tags:
