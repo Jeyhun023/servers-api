@@ -1,7 +1,7 @@
 CONTAINER_PHP=servers-api
 USER_ID=$(shell id -u)
 
-.PHONY: help ps build start stop restart init fresh exec artisan composer
+.PHONY: help ps build start stop restart init fresh exec artisan composer test
 
 help: ## Print this help message
 	@echo -e "\nUsage:\n  make \033[36m<target>\033[0m\n"
@@ -41,3 +41,6 @@ console: ## Run the php bin/console command
 
 composer: ## Run the composer command
 	docker exec -u ${USER_ID} ${CONTAINER_PHP} composer $(filter-out $@,$(MAKECMDGOALS))
+
+test: ## Run the PHPUnit test suite
+	@docker exec -u ${USER_ID} ${CONTAINER_PHP} vendor/bin/phpunit $(filter-out $@,$(MAKECMDGOALS))
